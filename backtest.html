@@ -1,0 +1,1833 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Analisis Backtest</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js and Annotation Plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/1.4.0/chartjs-plugin-annotation.min.js"></script>
+    <!-- SheetJS (XLSX) library for Excel export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- jsPDF and jsPDF-AutoTable for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            padding-top: 7rem; 
+        }
+        .header-global {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 1rem 1.5rem;
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 50;
+            color: #333333;
+            font-size: 0.75rem; 
+        }
+        .chart-container-wrapper {
+            position: relative;
+            height: 22rem;
+        }
+        
+        /* Gaya untuk bingkai foto & slider */
+        #photo-frame {
+            border: 2px dashed #cbd5e1;
+            transition: all 0.3s ease-in-out;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background-color: #f8fafc;
+            position: relative;
+        }
+        #photo-frame.no-photo {
+            min-height: 250px;
+        }
+        #photo-frame:hover {
+            border-color: #94a3b8;
+        }
+        #photo-frame.has-photo {
+            border-style: solid;
+            border-color: #e2e8f0;
+            padding: 0;
+            height: auto;
+        }
+        #photo-slider-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .slider-photo {
+            max-width: 100%;
+            height: auto;
+            width: auto;
+            display: none;
+        }
+        .slider-photo.active {
+            display: block;
+        }
+        .slider-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: rgba(0, 0, 0, 0.4);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 2.5rem;
+            height: 2.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        .slider-nav:hover {
+            background-color: rgba(0, 0, 0, 0.6);
+        }
+        #prev-photo { left: 0.5rem; }
+        #next-photo { right: 0.5rem; }
+        
+        /* Custom Modal for Confirmation */
+        #confirmation-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        #confirmation-modal.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        /* Custom Tooltip for Charts */
+        .chart-tooltip {
+            position: absolute;
+            background-color: rgba(17, 24, 39, 0.85);
+            color: white;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            font-size: 0.75rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+            z-index: 100;
+            min-width: 180px;
+            backdrop-filter: blur(5px);
+        }
+        .chart-tooltip.visible {
+            opacity: 1;
+        }
+        .tooltip-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0.25rem 0.75rem;
+        }
+        .tooltip-label {
+            font-weight: 300;
+            color: #d1d5db; /* gray-300 */
+        }
+        .tooltip-value {
+            font-weight: 600;
+            text-align: right;
+        }
+        .tooltip-title {
+            font-weight: 600;
+            text-align: center;
+            grid-column: 1 / -1;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            margin-bottom: 0.5rem;
+        }
+
+
+        @media (min-width: 768px) {
+            .header-global {
+                padding: 2rem 2.5rem; 
+                font-size: 0.875rem; 
+            }
+        }
+
+        @media (max-width: 767px) {
+            .chart-container-wrapper {
+                height: auto;
+                aspect-ratio: 16 / 9;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Global Header Component -->
+    <header class="header-global">
+        <div class="font-light"><a href="#">Backtest</a></div>
+        <nav class="hidden md:flex items-center space-x-5 font-light">
+            <a href="index.html" class="hover:text-blue-600 transition-colors">Home</a>
+            <a href="about_new.html" class="hover:text-blue-600 transition-colors">About</a>
+            <a href="services.html" class="hover:text-blue-600 transition-colors">Services</a>
+            <a href="contact.html" class="hover:text-blue-600 transition-colors">Contact</a>
+            <a href="beranda.html" class="hover:text-blue-600 transition-colors">Beranda</a>
+            <a href="investasi.html" class="hover:text-blue-600 transition-colors">Investasi</a>
+        </nav>
+        <div class="md:hidden">
+            <button id="hamburger-button" class="text-gray-700 focus:outline-none">
+                <svg id="hamburger-icon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+                <svg id="close-icon" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Mobile Menu -->
+    <div id="mobile-menu" class="hidden fixed inset-0 bg-white z-40 flex flex-col items-center justify-center space-y-6">
+        <div id="mobile-datetime" class="text-gray-600 text-sm font-light text-center"></div>
+        <nav class="flex flex-col items-center space-y-5 text-lg">
+            <a href="index.html" class="hover:text-blue-600 transition-colors">Home</a>
+            <a href="about_new.html" class="hover:text-blue-600 transition-colors">About</a>
+            <a href="services.html" class="hover:text-blue-600 transition-colors">Services</a>
+            <a href="contact.html" class="hover:text-blue-600 transition-colors">Contact</a>
+            <a href="beranda.html" class="hover:text-blue-600 transition-colors">Beranda</a>
+            <a href="investasi.html" class="hover:text-blue-600 transition-colors">Investasi</a>
+        </nav>
+    </div>
+    
+    <!-- Kontainer utama -->
+    <div class="container mx-auto bg-white p-4 md:p-6 rounded-xl shadow-lg border border-gray-200 space-y-5">
+
+        <div class="bg-gray-900 text-white p-5 md:p-6 rounded-t-xl">
+            <h1 class="text-2xl font-light text-center">Analisis Backtest Perdagangan</h1>
+            <p class="text-center text-gray-400 font-light mt-1 text-sm">Laporan komprehensif dari data file CSV Anda.</p>
+        </div>
+
+        <div class="p-4 md:p-6 space-y-5">
+            <!-- ===== BAGIAN UNGGAH FOTO & FILE ===== -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start mb-6">
+                <!-- Kolom Unggah Foto (Slider) -->
+                <div class="w-full">
+                    <h3 class="text-base font-light text-gray-900 text-center mb-3">Tambahkan Foto (PNG/JPG)</h3>
+                    <div id="photo-frame" class="w-full rounded-lg p-4 no-photo">
+                        <div id="photo-slider-container">
+                             <span id="photo-placeholder" class="text-gray-500 text-sm text-center">Klik untuk menambah foto.<br>Tahan lama untuk menghapus.</span>
+                        </div>
+                        <button id="prev-photo" class="slider-nav hidden">&lt;</button>
+                        <button id="next-photo" class="slider-nav hidden">&gt;</button>
+                        <input type="file" id="photo-upload" accept="image/png, image/jpeg" class="hidden" multiple>
+                    </div>
+                </div>
+                <!-- Kolom Unggah File -->
+                <div class="w-full flex flex-col items-center justify-start space-y-4 h-full">
+                     <h3 class="text-base font-light text-gray-900 text-center mb-1">Tambahkan File Lain</h3>
+                    <!-- Tombol Unggah PDF -->
+                    <label class="w-full md:w-auto inline-flex items-center justify-center px-6 py-2 bg-red-700 text-white font-light rounded-full shadow-md hover:bg-red-800 transform hover:scale-105 transition-all duration-200 cursor-pointer text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        Unggah File PDF
+                        <input type="file" id="pdf-upload-secondary" accept="application/pdf" class="hidden" />
+                    </label>
+                    <!-- Tombol Unggah Excel -->
+                    <label class="w-full md:w-auto inline-flex items-center justify-center px-6 py-2 bg-green-700 text-white font-light rounded-full shadow-md hover:bg-green-800 transform hover:scale-105 transition-all duration-200 cursor-pointer text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        Unggah File Excel
+                        <input type="file" id="excel-upload-secondary" accept=".xls,.xlsx" class="hidden" />
+                    </label>
+                    <!-- Tombol Unggah TPL -->
+                     <label class="w-full md:w-auto inline-flex items-center justify-center px-6 py-2 bg-blue-700 text-white font-light rounded-full shadow-md hover:bg-blue-800 transform hover:scale-105 transition-all duration-200 cursor-pointer text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        Unggah File TPL
+                        <input type="file" id="tpl-upload-secondary" accept=".tpl" class="hidden" />
+                    </label>
+                    <!-- Tombol Unggah CSV Utama -->
+                    <label id="upload-button" class="w-full md:w-auto inline-flex items-center justify-center px-6 py-2 bg-gray-900 text-white font-light rounded-full shadow-md hover:bg-gray-700 transform hover:scale-105 transition-all duration-200 cursor-pointer text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1" /><polyline points="12 12 8 8 12 4" /><line x1="12" y1="4" x2="12" y2="15" />
+                        </svg>
+                        Unggah File CSV (Untuk Analisis)
+                        <input type="file" id="file-upload" accept=".csv" class="hidden" />
+                    </label>
+
+                    <!-- Kontainer untuk menampilkan file yang diunggah -->
+                    <div id="pdf-file-container" class="w-full mt-2 text-center"></div>
+                    <div id="excel-file-container" class="w-full mt-2 text-center"></div>
+                    <div id="tpl-file-container" class="w-full mt-2 text-center"></div>
+                </div>
+            </div>
+            <!-- ===== AKHIR BAGIAN UNGGAH ===== -->
+
+
+            <!-- Wadah untuk pesan status (loading atau error) -->
+            <div id="status-container" class="text-center mt-3"></div>
+
+            <!-- Bagian Hasil -->
+            <div id="results-container" class="space-y-6 hidden">
+                <!-- Statistik Ringkasan Utama -->
+                <div id="primary-metrics-grid" class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center"></div>
+                
+                <!-- Statistik Tambahan -->
+                <div id="secondary-metrics-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 text-center"></div>
+
+                <!-- Grafik Profit/Loss -->
+                <div class="w-full">
+                    <div class="bg-gray-100 p-3 rounded-xl shadow-inner mt-4 border border-gray-200 flex flex-col">
+                        <h3 class="text-base font-light text-gray-900 text-center mb-3">Kurva Profit/Loss Kumulatif</h3>
+                        <div class="chart-container-wrapper">
+                            <canvas id="profitChart"></canvas>
+                            <div id="profitChart-tooltip" class="chart-tooltip"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Grafik Pertumbuhan Persentase -->
+                <div class="w-full" id="percentage-growth-chart-container" style="display:none;">
+                    <div class="bg-gray-100 p-3 rounded-xl shadow-inner mt-4 border border-gray-200 flex flex-col">
+                        <h3 class="text-base font-light text-gray-900 text-center mb-3">Kurva Pertumbuhan Persentase</h3>
+                        <div class="chart-container-wrapper">
+                            <canvas id="percentageGrowthChart"></canvas>
+                            <div id="percentageGrowthChart-tooltip" class="chart-tooltip"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Grafik Pertumbuhan Balance -->
+                <div class="w-full" id="balance-growth-chart-container" style="display:none;">
+                    <div class="bg-gray-100 p-3 rounded-xl shadow-inner mt-4 border border-gray-200 flex flex-col">
+                        <h3 class="text-base font-light text-gray-900 text-center mb-3">Kurva Pertumbuhan Balance Kumulatif</h3>
+                        <div class="chart-container-wrapper">
+                            <canvas id="balanceGrowthChart"></canvas>
+                            <div id="balanceGrowthChart-tooltip" class="chart-tooltip"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input Simulasi Saldo -->
+                <div class="bg-gray-100 p-5 md:p-6 rounded-xl shadow-md border border-gray-200 space-y-3">
+                    <h3 class="text-lg font-light text-gray-900 text-center">Parameter Analisis</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                        <div>
+                            <label for="initial-balance" class="block text-xs font-light text-gray-700">Saldo Awal</label>
+                            <input type="number" id="initial-balance" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-xs p-2" value="1000">
+                            <p class="text-gray-500 text-[10px] mt-1">Masukkan angka tanpa titik atau koma.</p>
+                        </div>
+                        <div>
+                            <label for="risk-percentage" class="block text-xs font-light text-gray-700">Presentase per Trade (%)</label>
+                            <input type="number" id="risk-percentage" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-xs p-2" value="1" step="any">
+                            <p class="text-gray-500 text-[10px] mt-1">Gunakan nilai realistis (misal: 0.5, 1, atau 2).</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabel Ringkasan P/L Bulanan -->
+                <div id="monthly-summary-container" class="w-full" style="display:none;">
+                    <div class="bg-gray-100 p-3 rounded-xl shadow-inner mt-4 border border-gray-200">
+                        <h3 class="text-base font-light text-gray-900 text-center mb-3">Ringkasan P/L Bulanan (%)</h3>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full text-center text-[10px] leading-tight">
+                                <thead class="border-b-2 border-gray-300">
+                                    <tr>
+                                        <th class="p-2 font-light">Tahun</th><th class="p-2 font-light">Jan</th><th class="p-2 font-light">Feb</th><th class="p-2 font-light">Mar</th><th class="p-2 font-light">Apr</th><th class="p-2 font-light">Mei</th><th class="p-2 font-light">Jun</th><th class="p-2 font-light">Jul</th><th class="p-2 font-light">Agu</th><th class="p-2 font-light">Sep</th><th class="p-2 font-light">Okt</th><th class="p-2 font-light">Nov</th><th class="p-2 font-light">Des</th><th class="p-2 font-light">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="monthly-summary-body"></tbody>
+                                <tfoot id="monthly-summary-footer" class="border-t-2 border-gray-300"></tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabel Ringkasan Balance Bulanan -->
+                <div id="monthly-balance-summary-container" class="w-full" style="display:none;">
+                    <div class="bg-gray-100 p-3 rounded-xl shadow-inner mt-4 border border-gray-200">
+                        <h3 class="text-base font-light text-gray-900 text-center mb-3">Ringkasan Balance Bulanan ($)</h3>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full text-center text-[10px] leading-tight">
+                                <thead class="border-b-2 border-gray-300">
+                                    <tr>
+                                        <th class="p-2 font-light">Tahun</th><th class="p-2 font-light">Jan</th><th class="p-2 font-light">Feb</th><th class="p-2 font-light">Mar</th><th class="p-2 font-light">Apr</th><th class="p-2 font-light">Mei</th><th class="p-2 font-light">Jun</th><th class="p-2 font-light">Jul</th><th class="p-2 font-light">Agu</th><th class="p-2 font-light">Sep</th><th class="p-2 font-light">Okt</th><th class="p-2 font-light">Nov</th><th class="p-2 font-light">Des</th><th class="p-2 font-light">Akhir Tahun</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="monthly-balance-summary-body"></tbody>
+                                <tfoot id="monthly-balance-summary-footer" class="border-t-2 border-gray-300"></tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistik Pair -->
+                <div id="pair-statistics-container" class="w-full" style="display:none;">
+                    <div class="bg-gray-100 p-3 rounded-xl shadow-inner mt-4 border border-gray-200">
+                        <h3 class="text-base font-light text-gray-900 text-center mb-3">Statistik Keberhasilan per Pair</h3>
+                        <div id="pair-statistics-body" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 p-4"></div>
+                    </div>
+                </div>
+                
+                <!-- Tabel CSV -->
+                <div id="table-container" class="overflow-x-auto rounded-lg shadow-inner border border-gray-200 mt-4">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50"><tr id="table-headers"></tr></thead>
+                        <tbody id="table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+
+                <!-- [MODIFIED & FIXED] Download Section -->
+                <div id="download-section" class="text-center pt-6 flex flex-col md:flex-row md:justify-center items-center space-y-4 md:space-y-0 md:space-x-4" style="display:none;">
+                    <button id="download-excel-btn" class="w-full md:w-auto bg-green-700 text-white font-light py-2 px-6 md:py-3 md:px-8 rounded-full shadow-md hover:bg-green-800 transform hover:scale-105 transition-all duration-200 cursor-pointer text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block -mt-1 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
+                        Unduh Laporan Excel
+                    </button>
+                    <button id="download-pdf-btn" class="w-full md:w-auto bg-blue-700 text-white font-light py-2 px-6 md:py-3 md:px-8 rounded-full shadow-md hover:bg-blue-800 transform hover:scale-105 transition-all duration-200 cursor-pointer text-sm">
+                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block -mt-1 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
+                        Unduh Laporan PDF
+                    </button>
+                </div>
+
+                <!-- Panduan -->
+                <div class="bg-gray-100 p-5 md:p-6 rounded-xl shadow-md border border-gray-200 space-y-4">
+                    <h3 class="text-lg font-light text-gray-900 text-center">Panduan Penggunaan Backtest</h3>
+                    <p class="text-gray-700 text-sm text-center">Selamat datang! Alat ini membantu Anda menguji strategi perdagangan menggunakan data historis.</p>
+                    <h4 class="font-light text-base text-gray-800 pt-3 border-t border-gray-300">Langkah 1: Siapkan File CSV Anda</h4>
+                    <p class="text-gray-700 text-xs">Pastikan file CSV Anda memiliki format yang benar dengan header: <code>Pair;Action;Tanggal Entry;Tanggal Exit;Entry;TP;SL;Keterangan</code>.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Custom Confirmation Modal -->
+    <div id="confirmation-modal" class="">
+        <div class="modal-content">
+            <p class="mb-4 text-gray-700">Apakah Anda yakin ingin menghapus foto ini?</p>
+            <div class="flex justify-center space-x-4">
+                <button id="confirm-delete-btn" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Ya, Hapus</button>
+                <button id="cancel-delete-btn" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400">Batal</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- Hamburger Menu Logic ---
+            const hamburgerButton = document.getElementById('hamburger-button');
+            const mobileMenu = document.getElementById('mobile-menu');
+            const mobileDateTime = document.getElementById('mobile-datetime');
+            const hamburgerIcon = document.getElementById('hamburger-icon');
+            const closeIcon = document.getElementById('close-icon');
+
+            hamburgerButton.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+                hamburgerIcon.classList.toggle('hidden');
+                closeIcon.classList.toggle('hidden');
+            });
+            
+            function updateMobileDateTime() {
+                const now = new Date();
+                const dateOptions = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+                const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit' };
+                const dateString = now.toLocaleDateString('id-ID', dateOptions);
+                const timeString = now.toLocaleTimeString('id-ID', timeOptions).replace(/\./g, ':');
+                mobileDateTime.textContent = `${dateString} ${timeString}`;
+            }
+            setInterval(updateMobileDateTime, 1000);
+            updateMobileDateTime();
+            // --- End of Hamburger Menu Logic ---
+            
+            // --- Photo Slider & File Upload Logic ---
+            const photoFrame = document.getElementById('photo-frame');
+            const photoUploadInput = document.getElementById('photo-upload');
+            const photoSliderContainer = document.getElementById('photo-slider-container');
+            const photoPlaceholder = document.getElementById('photo-placeholder');
+            const prevPhotoButton = document.getElementById('prev-photo');
+            const nextPhotoButton = document.getElementById('next-photo');
+            const pdfUploadSecondaryInput = document.getElementById('pdf-upload-secondary');
+            const pdfFileContainer = document.getElementById('pdf-file-container');
+            const excelUploadSecondaryInput = document.getElementById('excel-upload-secondary');
+            const excelFileContainer = document.getElementById('excel-file-container');
+            const tplUploadSecondaryInput = document.getElementById('tpl-upload-secondary');
+            const tplFileContainer = document.getElementById('tpl-file-container');
+            const confirmationModal = document.getElementById('confirmation-modal');
+            const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+            const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+            
+            let uploadedPhotos = [];
+            let currentPhotoIndex = 0;
+            const MAX_PHOTOS = 5;
+            let longPressTimer;
+            let deleteHandler = null;
+
+            photoFrame.addEventListener('click', (e) => {
+                if (e.target.closest('.slider-nav')) return;
+                if (uploadedPhotos.length < MAX_PHOTOS) {
+                    photoUploadInput.click();
+                } else {
+                    alert(`Anda hanya dapat mengunggah maksimal ${MAX_PHOTOS} foto.`);
+                }
+            });
+
+            photoUploadInput.addEventListener('change', (event) => {
+                const files = event.target.files;
+                if (files.length > 0) {
+                    const spaceLeft = MAX_PHOTOS - uploadedPhotos.length;
+                    const filesToProcess = Array.from(files).slice(0, spaceLeft);
+
+                    filesToProcess.forEach(file => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            uploadedPhotos.push(e.target.result);
+                            currentPhotoIndex = uploadedPhotos.length - 1;
+                            renderPhotoSlider();
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                    photoUploadInput.value = '';
+                }
+            });
+            
+            function renderPhotoSlider() {
+                photoSliderContainer.innerHTML = '';
+
+                if (uploadedPhotos.length === 0) {
+                    photoSliderContainer.appendChild(photoPlaceholder);
+                    photoPlaceholder.classList.remove('hidden');
+                    photoFrame.classList.remove('has-photo');
+                    photoFrame.classList.add('no-photo');
+                    prevPhotoButton.classList.add('hidden');
+                    nextPhotoButton.classList.add('hidden');
+                } else {
+                    photoPlaceholder.classList.add('hidden');
+                    photoFrame.classList.add('has-photo');
+                    photoFrame.classList.remove('no-photo');
+
+                    uploadedPhotos.forEach((photoSrc, index) => {
+                        const img = document.createElement('img');
+                        img.src = photoSrc;
+                        img.alt = `Foto ${index + 1}`;
+                        img.className = 'slider-photo';
+                        if (index === currentPhotoIndex) {
+                            img.classList.add('active');
+                        }
+                        photoSliderContainer.appendChild(img);
+                    });
+                    
+                    if (uploadedPhotos.length > 1) {
+                        prevPhotoButton.classList.remove('hidden');
+                        nextPhotoButton.classList.remove('hidden');
+                    } else {
+                        prevPhotoButton.classList.add('hidden');
+                        nextPhotoButton.classList.add('hidden');
+                    }
+                }
+                savePhotosToLocalStorage();
+            }
+            
+            function slideToPrevPhoto(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                currentPhotoIndex = (currentPhotoIndex > 0) ? currentPhotoIndex - 1 : uploadedPhotos.length - 1;
+                renderPhotoSlider();
+            }
+
+            function slideToNextPhoto(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                currentPhotoIndex = (currentPhotoIndex < uploadedPhotos.length - 1) ? currentPhotoIndex + 1 : 0;
+                renderPhotoSlider();
+            }
+
+            prevPhotoButton.addEventListener('click', slideToPrevPhoto);
+            prevPhotoButton.addEventListener('touchstart', slideToPrevPhoto, { passive: false });
+
+            nextPhotoButton.addEventListener('click', slideToNextPhoto);
+            nextPhotoButton.addEventListener('touchstart', slideToNextPhoto, { passive: false });
+
+            function showConfirmationModal(onConfirm) {
+                confirmationModal.classList.add('show');
+                deleteHandler = onConfirm;
+            }
+
+            function hideConfirmationModal() {
+                confirmationModal.classList.remove('show');
+                deleteHandler = null;
+            }
+
+            photoFrame.addEventListener('mousedown', (e) => {
+                if (e.target.closest('.slider-nav')) return;
+                if (uploadedPhotos.length > 0) longPressTimer = setTimeout(() => showConfirmationModal(deleteCurrentPhoto), 1000);
+            });
+            photoFrame.addEventListener('mouseup', () => clearTimeout(longPressTimer));
+            photoFrame.addEventListener('mouseleave', () => clearTimeout(longPressTimer));
+            photoFrame.addEventListener('touchstart', (e) => {
+                if (e.target.closest('.slider-nav')) return;
+                if (uploadedPhotos.length > 0) { e.preventDefault(); longPressTimer = setTimeout(() => showConfirmationModal(deleteCurrentPhoto), 1000); }
+            });
+            photoFrame.addEventListener('touchend', () => clearTimeout(longPressTimer));
+
+            confirmDeleteBtn.addEventListener('click', () => {
+                if (typeof deleteHandler === 'function') {
+                    deleteHandler();
+                }
+                hideConfirmationModal();
+            });
+
+            cancelDeleteBtn.addEventListener('click', hideConfirmationModal);
+
+            function deleteCurrentPhoto() {
+                if (uploadedPhotos.length > 0) {
+                    uploadedPhotos.splice(currentPhotoIndex, 1);
+                    if (currentPhotoIndex >= uploadedPhotos.length) {
+                        currentPhotoIndex = Math.max(0, uploadedPhotos.length - 1);
+                    }
+                    renderPhotoSlider();
+                }
+            }
+            
+            function savePhotosToLocalStorage() {
+                localStorage.setItem('savedPhotos', JSON.stringify(uploadedPhotos));
+            }
+
+            function loadPhotosFromLocalStorage() {
+                const savedPhotos = localStorage.getItem('savedPhotos');
+                if (savedPhotos) {
+                    uploadedPhotos = JSON.parse(savedPhotos);
+                    renderPhotoSlider();
+                }
+            }
+
+            function handleFileUpload(file, storageKey, renderFunction) {
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const fileData = { name: file.name, dataUrl: e.target.result };
+                        localStorage.setItem(storageKey, JSON.stringify(fileData));
+                        renderFunction();
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+
+            function renderFileInfo(container, storageKey, iconSvg) {
+                const fileDataJSON = localStorage.getItem(storageKey);
+                container.innerHTML = '';
+
+                if (fileDataJSON) {
+                    const fileData = JSON.parse(fileDataJSON);
+                    const fileInfoDiv = document.createElement('div');
+                    fileInfoDiv.className = 'flex items-center justify-between bg-gray-100 p-2 rounded-lg w-full max-w-xs mx-auto';
+                    
+                    const fileNameSpan = `<span class="text-xs text-gray-700 truncate" title="${fileData.name}">${fileData.name}</span>`;
+
+                    const downloadButton = document.createElement('button');
+                    downloadButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500 hover:text-gray-800" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>`;
+                    downloadButton.className = 'ml-2';
+                    downloadButton.title = 'Unduh File';
+                    downloadButton.onclick = () => {
+                        const link = document.createElement('a');
+                        link.href = fileData.dataUrl;
+                        link.download = fileData.name;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    };
+
+                    fileInfoDiv.innerHTML = `<div class="flex items-center truncate">${iconSvg}${fileNameSpan}</div>`;
+                    fileInfoDiv.appendChild(downloadButton);
+                    container.appendChild(fileInfoDiv);
+                }
+            }
+
+            const pdfIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-600 mr-2 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" clip-rule="evenodd" /><path d="M7 12a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z" /></svg>`;
+            const excelIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-600 mr-2 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" clip-rule="evenodd" /><path d="M7 12a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z" /></svg>`;
+            const tplIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-600 mr-2 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" clip-rule="evenodd" /><path d="M7 12a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z" /></svg>`;
+
+            pdfUploadSecondaryInput.addEventListener('change', (e) => handleFileUpload(e.target.files[0], 'savedPdfFile', () => renderFileInfo(pdfFileContainer, 'savedPdfFile', pdfIcon)));
+            excelUploadSecondaryInput.addEventListener('change', (e) => handleFileUpload(e.target.files[0], 'savedExcelFile', () => renderFileInfo(excelFileContainer, 'savedExcelFile', excelIcon)));
+            tplUploadSecondaryInput.addEventListener('change', (e) => handleFileUpload(e.target.files[0], 'savedTplFile', () => renderFileInfo(tplFileContainer, 'savedTplFile', tplIcon)));
+            
+            const fileUpload = document.getElementById('file-upload');
+            const statusContainer = document.getElementById('status-container');
+            const resultsContainer = document.getElementById('results-container');
+            const primaryMetricsGrid = document.getElementById('primary-metrics-grid');
+            const secondaryMetricsGrid = document.getElementById('secondary-metrics-grid');
+            const profitChartCanvas = document.getElementById('profitChart');
+            const percentageGrowthChartCanvas = document.getElementById('percentageGrowthChart');
+            const balanceGrowthChartCanvas = document.getElementById('balanceGrowthChart');
+            const tableContainer = document.getElementById('table-container');
+            const tableHeaders = document.getElementById('table-headers');
+            const tableBody = document.getElementById('table-body');
+            
+            const initialBalanceInput = document.getElementById('initial-balance');
+            const riskPercentageInput = document.getElementById('risk-percentage');
+            
+            const monthlySummaryContainer = document.getElementById('monthly-summary-container');
+            const monthlySummaryBody = document.getElementById('monthly-summary-body');
+            const monthlySummaryFooter = document.getElementById('monthly-summary-footer');
+
+            const monthlyBalanceSummaryContainer = document.getElementById('monthly-balance-summary-container');
+            const monthlyBalanceSummaryBody = document.getElementById('monthly-balance-summary-body');
+            
+            const downloadSection = document.getElementById('download-section');
+            const downloadExcelBtn = document.getElementById('download-excel-btn');
+            const downloadPdfBtn = document.getElementById('download-pdf-btn');
+            
+            let profitChartInstance;
+            let percentageGrowthChartInstance;
+            let balanceGrowthChartInstance;
+            let csvData = [];
+            let rawCsvText = '';
+            let fullMetrics = {};
+            let monthlySummaryData = {};
+            let monthlyBalanceData = {};
+
+            function parseDate(dateString) {
+                const parts = dateString.split('-');
+                if (parts.length !== 3) return null;
+                const day = parseInt(parts[0], 10);
+                const monthName = parts[1];
+                if (!monthName) return null;
+                const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(monthName);
+                if (month === -1) return null;
+                let year = parseInt(parts[2], 10);
+                if (year < 100) year = 2000 + year;
+                return new Date(year, month, day);
+            }
+
+            function parseCsv(text) {
+                const lines = text.split('\n').filter(line => line.trim() !== '');
+                if (lines.length < 1) return [];
+                const headers = lines[0].split(';').map(header => header.trim());
+                const data = lines.slice(1).map(line => {
+                    const values = line.split(';').map(value => value.trim());
+                    if (values.length !== headers.length) return null;
+                    let row = {};
+                    headers.forEach((header, i) => { row[header] = values[i]; });
+                    return row;
+                }).filter(row => row !== null);
+                return data;
+            }
+
+            function calculateStatistics(data, riskPercentage, initialBalance) {
+                let cumulativeProfit = 0, peak = 0, maxDrawdownPoints = 0;
+                let profitHistory = [{ trade: 0, profit: 0 }];
+                let totalTrades = 0, winCount = 0;
+                let currentTPStreak = 0, maxTPStreak = 0, currentSLStreak = 0, maxSLStreak = 0;
+                let totalTPDistance = 0, totalSLDistance = 0;
+                let totalHoldingDays = 0;
+                let cumulativeGrowth = 0;
+                let growthHistory = [{ trade: 0, growth: 0 }];
+                let peakGrowth = 0, maxDrawdownPercentage = 0;
+                let currentBalance = initialBalance;
+                const balanceHistory = [{ trade: 0, balance: currentBalance }];
+                let maxTPStreakDuration = 0, currentTPStreakStartDate = null;
+                let maxSLStreakDuration = 0, currentSLStreakStartDate = null;
+                let maxDrawdownPointsDuration = 0, drawdownPointsStartDate = null;
+                let maxDrawdownPercentageDuration = 0, drawdownPercentageStartDate = null;
+                let peakGrowthDate = null, peakDate = null;
+
+                data.forEach((trade, index) => {
+                    const entryDate = parseDate(trade['Tanggal Entry']);
+                    const exitDate = parseDate(trade['Tanggal Exit']);
+                    const keterangan = trade['Keterangan'].toUpperCase();
+
+                    if (keterangan === 'TP') {
+                        if (currentTPStreak === 0) currentTPStreakStartDate = entryDate;
+                        currentTPStreak++;
+                        currentSLStreak = 0;
+                        if (currentTPStreak > maxTPStreak) {
+                            maxTPStreak = currentTPStreak;
+                            if(currentTPStreakStartDate && exitDate) maxTPStreakDuration = (exitDate - currentTPStreakStartDate) / (1000 * 60 * 60 * 24);
+                        }
+                    } else if (keterangan === 'SL') {
+                        if (currentSLStreak === 0) currentSLStreakStartDate = entryDate;
+                        currentSLStreak++;
+                        currentTPStreak = 0;
+                        if (currentSLStreak > maxSLStreak) {
+                            maxSLStreak = currentSLStreak;
+                            if(currentSLStreakStartDate && exitDate) maxSLStreakDuration = (exitDate - currentSLStreakStartDate) / (1000 * 60 * 60 * 24);
+                        }
+                    }
+
+                    if (cumulativeProfit > peak) {
+                        peak = cumulativeProfit;
+                        peakDate = exitDate;
+                    }
+                    const drawdown = peak - cumulativeProfit;
+                    if (drawdown > maxDrawdownPoints) {
+                        maxDrawdownPoints = drawdown;
+                        drawdownPointsStartDate = peakDate;
+                        if(drawdownPointsStartDate && exitDate) maxDrawdownPointsDuration = (exitDate - drawdownPointsStartDate) / (1000 * 60 * 60 * 24);
+                    }
+
+                    if (cumulativeGrowth > peakGrowth) {
+                        peakGrowth = cumulativeGrowth;
+                        peakGrowthDate = exitDate;
+                    }
+                    const growthDrawdown = peakGrowth - cumulativeGrowth;
+                    if (growthDrawdown > maxDrawdownPercentage) {
+                        maxDrawdownPercentage = growthDrawdown;
+                        drawdownPercentageStartDate = peakGrowthDate;
+                        if(drawdownPercentageStartDate && exitDate) maxDrawdownPercentageDuration = (exitDate - drawdownPercentageStartDate) / (1000 * 60 * 60 * 24);
+                    }
+                    
+                    const entryPrice = parseFloat(trade['Entry']);
+                    const tpPrice = parseFloat(trade['TP']);
+                    const slPrice = parseFloat(trade['SL']);
+
+                    if (isNaN(entryPrice) || isNaN(tpPrice) || isNaN(slPrice)) return;
+                    
+                    totalTrades++;
+                    let profitLossPoints = 0;
+                    const tpDistance = Math.abs(tpPrice - entryPrice);
+                    const slDistance = Math.abs(slPrice - entryPrice);
+
+                    if (keterangan === 'TP') {
+                        profitLossPoints = tpDistance;
+                        winCount++;
+                        cumulativeGrowth += riskPercentage;
+                        currentBalance += currentBalance * (riskPercentage / 100);
+                    } else if (keterangan === 'SL') {
+                        profitLossPoints = -slDistance;
+                        cumulativeGrowth -= riskPercentage;
+                        currentBalance -= currentBalance * (riskPercentage / 100);
+                    }
+
+                    totalTPDistance += tpDistance;
+                    totalSLDistance += slDistance;
+                    cumulativeProfit += profitLossPoints;
+                    profitHistory.push({ trade: index + 1, profit: cumulativeProfit });
+                    growthHistory.push({ trade: index + 1, growth: cumulativeGrowth });
+                    balanceHistory.push({ trade: index + 1, balance: currentBalance });
+
+                    if (entryDate && exitDate) {
+                        totalHoldingDays += (exitDate.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24);
+                    }
+                });
+
+                const winRate = totalTrades > 0 ? (winCount / totalTrades) * 100 : 0;
+                const avgRiskReward = totalSLDistance > 0 ? totalTPDistance / totalSLDistance : 0;
+                const avgHoldingPeriod = totalTrades > 0 ? totalHoldingDays / totalTrades : 0;
+                const avgProfitPerTrade = totalTrades > 0 ? cumulativeGrowth / totalTrades : 0;
+                let totalMonths = 0;
+                if(data.length > 1) {
+                    const firstDate = parseDate(data[0]['Tanggal Entry']);
+                    const lastDate = parseDate(data[data.length-1]['Tanggal Exit']);
+                    if(firstDate && lastDate) {
+                        totalMonths = (lastDate.getFullYear() - firstDate.getFullYear()) * 12 + (lastDate.getMonth() - firstDate.getMonth()) + 1;
+                    }
+                }
+                const avgMonthlyGain = totalMonths > 0 ? cumulativeGrowth / totalMonths : 0;
+                const avgYearlyGain = totalMonths > 0 ? (cumulativeGrowth / totalMonths) * 12 : 0;
+                
+                return {
+                    totalTrades, finalProfit: cumulativeProfit, winRate: winRate.toFixed(2),
+                    maxDrawdownPoints, maxTPStreak, maxSLStreak, profitHistory,
+                    maxDrawdownPercentage, avgProfitPerTrade, avgMonthlyGain, avgYearlyGain,
+                    finalBalance: currentBalance, avgRiskReward, avgHoldingPeriod,
+                    growthHistory, balanceHistory,
+                    maxDrawdownPointsDuration, maxTPStreakDuration, maxSLStreakDuration, maxDrawdownPercentageDuration
+                };
+            }
+            
+            function calculateMonthlySummary(data, riskPercentage) {
+                if (isNaN(riskPercentage) || riskPercentage <= 0 || data.length === 0) {
+                    return {};
+                }
+
+                const monthlyPercentages = {};
+                const yearlyPercentages = {};
+                const monthlyTradeCounts = {};
+                const yearlyTradeCounts = {};
+                const monthlyTPCounts = {};
+                const yearlyTPCounts = {};
+                const monthlySLCounts = {};
+                const yearlySLCounts = {};
+
+                let overallTotalPercentage = 0, overallTotalTrades = 0, overallTotalTP = 0, overallTotalSL = 0;
+
+                const sortedData = [...data].sort((a, b) => {
+                    const dateA = parseDate(a['Tanggal Exit']);
+                    const dateB = parseDate(b['Tanggal Exit']);
+                    return (dateA && dateB) ? dateA - dateB : 0;
+                });
+
+                sortedData.forEach(trade => {
+                    const exitDate = parseDate(trade['Tanggal Exit']);
+                    if (!exitDate) return;
+
+                    const year = exitDate.getFullYear();
+                    const month = exitDate.getMonth();
+
+                    if (!monthlyPercentages[year]) {
+                        monthlyPercentages[year] = Array(12).fill(0);
+                        yearlyPercentages[year] = 0;
+                        monthlyTradeCounts[year] = Array(12).fill(0);
+                        yearlyTradeCounts[year] = 0;
+                        monthlyTPCounts[year] = Array(12).fill(0);
+                        yearlyTPCounts[year] = 0;
+                        monthlySLCounts[year] = Array(12).fill(0);
+                        yearlySLCounts[year] = 0;
+                    }
+
+                    const keterangan = trade['Keterangan'].toUpperCase();
+                    let percentageChange = 0;
+                    if (keterangan === 'TP') {
+                        percentageChange = riskPercentage;
+                        monthlyTPCounts[year][month]++;
+                        yearlyTPCounts[year]++;
+                        overallTotalTP++;
+                    } else if (keterangan === 'SL') {
+                        percentageChange = -riskPercentage;
+                        monthlySLCounts[year][month]++;
+                        yearlySLCounts[year]++;
+                        overallTotalSL++;
+                    }
+                    
+                    monthlyPercentages[year][month] += percentageChange;
+                    yearlyPercentages[year] += percentageChange;
+                    overallTotalPercentage += percentageChange;
+                    
+                    monthlyTradeCounts[year][month]++;
+                    yearlyTradeCounts[year]++;
+                    overallTotalTrades++;
+                });
+
+                return { 
+                    percentageSummary: monthlyPercentages, 
+                    yearlyTotals: yearlyPercentages, 
+                    overallTotalPercentage, 
+                    monthlyTradeCounts, 
+                    yearlyTradeCounts, 
+                    overallTotalTrades,
+                    monthlyTPCounts,
+                    yearlyTPCounts,
+                    overallTotalTP,
+                    monthlySLCounts,
+                    yearlySLCounts,
+                    overallTotalSL
+                };
+            }
+
+            function renderMonthlySummaryTable({ percentageSummary, yearlyTotals, overallTotalPercentage, monthlyTradeCounts, yearlyTradeCounts, overallTotalTrades, monthlyTPCounts, yearlyTPCounts, overallTotalTP, monthlySLCounts, yearlySLCounts, overallTotalSL }) {
+                monthlySummaryBody.innerHTML = '';
+                monthlySummaryFooter.innerHTML = '';
+                if (!percentageSummary || Object.keys(percentageSummary).length === 0) {
+                    monthlySummaryContainer.style.display = 'none';
+                    return;
+                }
+                const years = Object.keys(percentageSummary).sort();
+                years.forEach(year => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-gray-200';
+                    const yearTd = document.createElement('td');
+                    yearTd.className = 'p-2 font-light';
+                    yearTd.textContent = year;
+                    tr.appendChild(yearTd);
+                    for (let i = 0; i < 12; i++) {
+                        const profitPercentage = percentageSummary[year][i];
+                        const tradeCount = monthlyTradeCounts[year] ? monthlyTradeCounts[year][i] : 0;
+                        const tpCount = monthlyTPCounts[year] ? monthlyTPCounts[year][i] : 0;
+                        const slCount = monthlySLCounts[year] ? monthlySLCounts[year][i] : 0;
+                        const netTP = tpCount - slCount;
+                        const monthTd = document.createElement('td');
+                        monthTd.className = `p-2`;
+                        monthTd.innerHTML = `
+                            <p class="font-light ${profitPercentage > 0 ? 'text-black' : profitPercentage < 0 ? 'text-red-600' : 'text-gray-500'}">
+                                ${profitPercentage !== 0 ? `${profitPercentage.toFixed(2)}%` : '-'}
+                            </p>
+                            ${tradeCount > 0 ? `<p class="text-[9px] text-gray-500 mt-0.5">(${tradeCount})</p>` : ''}
+                            ${tradeCount > 0 ? `<p class="text-[9px] text-gray-600 mt-0.5">(<span class="text-red-500">SL:${slCount}</span> / <span class="text-green-500">TP:${tpCount}</span>)</p>` : ''}
+                            ${tradeCount > 0 ? `<p class="text-[9px] font-semibold ${netTP > 0 ? 'text-blue-600' : netTP < 0 ? 'text-orange-600' : 'text-gray-600'} mt-0.5">Nilai TP Bersih: ${netTP}</p>` : ''}
+                        `;
+                        tr.appendChild(monthTd);
+                    }
+                    const totalYearPercentage = yearlyTotals[year];
+                    const totalYearTrades = yearlyTradeCounts[year] || 0;
+                    const totalYearTPs = yearlyTPCounts[year] || 0;
+                    const totalYearSLs = yearlySLCounts[year] || 0;
+                    const netYearlyTP = totalYearTPs - totalYearSLs;
+                    const totalTd = document.createElement('td');
+                    totalTd.className = `p-2`;
+                    totalTd.innerHTML = `
+                        <p class="font-light ${totalYearPercentage > 0 ? 'text-black' : totalYearPercentage < 0 ? 'text-red-600' : 'text-gray-500'}">
+                            ${totalYearPercentage !== 0 ? `${totalYearPercentage.toFixed(2)}%` : '-'}
+                        </p>
+                        ${totalYearTrades > 0 ? `<p class="text-[9px] text-gray-500 mt-0.5">(${totalYearTrades})</p>` : ''}
+                        ${totalYearTrades > 0 ? `<p class="text-[9px] text-gray-600 mt-0.5">(<span class="text-red-500">SL:${totalYearSLs}</span> / <span class="text-green-500">TP:${totalYearTPs}</span>)</p>` : ''}
+                        ${totalYearTrades > 0 ? `<p class="text-[9px] font-semibold ${netYearlyTP > 0 ? 'text-blue-600' : netYearlyTP < 0 ? 'text-orange-600' : 'text-gray-600'} mt-0.5">Nilai TP Bersih: ${netYearlyTP}</p>` : ''}
+                    `;
+                    tr.appendChild(totalTd);
+                    monthlySummaryBody.appendChild(tr);
+                });
+                const footerTr = document.createElement('tr');
+                const footerLabelTd = document.createElement('td');
+                footerLabelTd.colSpan = "13";
+                footerLabelTd.className = "p-2 text-right font-light";
+                footerLabelTd.textContent = "Total Keseluruhan";
+                footerTr.appendChild(footerLabelTd);
+                const netOverallTP = overallTotalTP - overallTotalSL;
+                const footerValueTd = document.createElement('td');
+                footerValueTd.className = `p-2`;
+                footerValueTd.innerHTML = `
+                    <p class="font-light ${overallTotalPercentage > 0 ? 'text-black' : overallTotalPercentage < 0 ? 'text-red-600' : 'text-gray-500'}">
+                        ${overallTotalPercentage.toFixed(2)}%
+                    </p>
+                    ${overallTotalTrades > 0 ? `<p class="text-[9px] text-gray-500 mt-0.5">(${overallTotalTrades})</p>` : ''}
+                    ${overallTotalTrades > 0 ? `<p class="text-[9px] text-gray-600 mt-0.5">(<span class="text-red-500">SL:${overallTotalSL}</span> / <span class="text-green-500">TP:${overallTotalTP}</span>)</p>` : ''}
+                    ${overallTotalTrades > 0 ? `<p class="text-[9px] font-semibold ${netOverallTP > 0 ? 'text-blue-600' : netOverallTP < 0 ? 'text-orange-600' : 'text-gray-600'} mt-0.5">Nilai TP Bersih: ${netOverallTP}</p>` : ''}
+                `;
+                footerTr.appendChild(footerValueTd);
+                monthlySummaryFooter.appendChild(footerTr);
+                monthlySummaryContainer.style.display = 'block';
+            }
+
+            function calculateMonthlyBalanceSummary(data, initialBalance, riskPercentage) {
+                if (isNaN(riskPercentage) || isNaN(initialBalance) || data.length === 0) {
+                    return {};
+                }
+
+                const monthlyBalances = {};
+                const monthlyNetChanges = {};
+                let currentBalance = initialBalance;
+                let lastReportedBalance = initialBalance; 
+
+                const sortedData = [...data].sort((a, b) => {
+                    const dateA = parseDate(a['Tanggal Exit']);
+                    const dateB = parseDate(b['Tanggal Exit']);
+                    return (dateA && dateB) ? dateA - dateB : 0;
+                });
+                
+                if (sortedData.length === 0) return {};
+
+                const firstDate = parseDate(sortedData[0]['Tanggal Entry']);
+                const lastDate = parseDate(sortedData[sortedData.length - 1]['Tanggal Exit']);
+                if (!firstDate || !lastDate) return {};
+
+                let currentDateIterator = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
+                let tradeIndex = 0;
+
+                while (currentDateIterator <= lastDate) {
+                    const year = currentDateIterator.getFullYear();
+                    const month = currentDateIterator.getMonth();
+
+                    if (!monthlyBalances[year]) {
+                        monthlyBalances[year] = Array(12).fill(null);
+                        monthlyNetChanges[year] = Array(12).fill(null);
+                    }
+
+                    const endOfMonth = new Date(year, month + 1, 0);
+                    let tradesThisMonth = false;
+
+                    while (tradeIndex < sortedData.length) {
+                        const trade = sortedData[tradeIndex];
+                        const exitDate = parseDate(trade['Tanggal Exit']);
+                        if (!exitDate || exitDate > endOfMonth) {
+                            break; 
+                        }
+                        
+                        tradesThisMonth = true;
+                        const keterangan = trade['Keterangan'].toUpperCase();
+                        if (keterangan === 'TP') {
+                            currentBalance += currentBalance * (riskPercentage / 100);
+                        } else if (keterangan === 'SL') {
+                            currentBalance -= currentBalance * (riskPercentage / 100);
+                        }
+                        tradeIndex++;
+                    }
+                    
+                    if (tradesThisMonth) {
+                        monthlyBalances[year][month] = currentBalance;
+                        monthlyNetChanges[year][month] = currentBalance - lastReportedBalance;
+                        lastReportedBalance = currentBalance;
+                    }
+                    
+                    currentDateIterator.setMonth(currentDateIterator.getMonth() + 1);
+                }
+
+                return { balanceSummary: monthlyBalances, netChangeSummary: monthlyNetChanges };
+            }
+
+            function renderMonthlyBalanceSummaryTable({ balanceSummary, netChangeSummary }) {
+                monthlyBalanceSummaryBody.innerHTML = '';
+                if (!balanceSummary || Object.keys(balanceSummary).length === 0) {
+                    monthlyBalanceSummaryContainer.style.display = 'none';
+                    return;
+                }
+
+                const formatCurrency = (value, showSign = false) => {
+                    if (value === null || isNaN(value)) return '-';
+                    const sign = value > 0 ? '+' : '';
+                    return `${showSign ? sign : ''}$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                };
+
+                const years = Object.keys(balanceSummary).sort();
+                let yearStartBalance = parseFloat(initialBalanceInput.value);
+
+                years.forEach(year => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-gray-200';
+                    tr.innerHTML = `<td class="p-2 font-light">${year}</td>`;
+                    
+                    let lastBalanceOfYear = yearStartBalance;
+                    let yearlyNetChange = 0;
+
+                    for (let i = 0; i < 12; i++) {
+                        const balance = balanceSummary[year][i];
+                        const netChange = netChangeSummary[year][i];
+                        let netChangeHtml = '';
+
+                        if (netChange !== null) {
+                            const colorClass = netChange > 0 ? 'text-green-600' : netChange < 0 ? 'text-red-600' : 'text-gray-500';
+                            netChangeHtml = `<p class="text-[9px] font-semibold ${colorClass} mt-0.5">Dolar Bersih: ${formatCurrency(netChange, true)}</p>`;
+                        }
+
+                        tr.innerHTML += `
+                            <td class="p-2">
+                                <p class="font-light text-gray-800">${formatCurrency(balance)}</p>
+                                ${netChangeHtml}
+                            </td>`;
+
+                        if (balance !== null) {
+                            lastBalanceOfYear = balance;
+                        }
+                        if (netChange !== null) {
+                            yearlyNetChange += netChange;
+                        }
+                    }
+                    
+                    const yearlyNetChangeColor = yearlyNetChange > 0 ? 'text-green-600' : yearlyNetChange < 0 ? 'text-red-600' : 'text-gray-500';
+                    const yearlyNetChangeHtml = `<p class="text-[9px] font-semibold ${yearlyNetChangeColor} mt-0.5">Dolar Bersih: ${formatCurrency(yearlyNetChange, true)}</p>`;
+
+                    tr.innerHTML += `
+                        <td class="p-2">
+                           <p class="font-light text-gray-900 font-semibold">${formatCurrency(lastBalanceOfYear)}</p>
+                           ${yearlyNetChangeHtml}
+                        </td>`;
+                    
+                    monthlyBalanceSummaryBody.appendChild(tr);
+                    yearStartBalance = lastBalanceOfYear;
+                });
+
+                monthlyBalanceSummaryContainer.style.display = 'block';
+            }
+
+
+            function calculateAndRenderPairStatistics(data) {
+                const container = document.getElementById('pair-statistics-container');
+                const body = document.getElementById('pair-statistics-body');
+                if (!container || !body) return;
+                if (data.length === 0) {
+                    container.style.display = 'none';
+                    return;
+                }
+                const pairStats = {};
+                data.forEach(trade => {
+                    const pair = trade['Pair'];
+                    const keterangan = trade['Keterangan']?.toUpperCase();
+                    if (!pair) return;
+                    if (!pairStats[pair]) pairStats[pair] = { total: 0, wins: 0 };
+                    pairStats[pair].total++;
+                    if (keterangan === 'TP') pairStats[pair].wins++;
+                });
+                body.innerHTML = ''; 
+                const sortedPairs = Object.keys(pairStats).sort();
+                for (const pair of sortedPairs) {
+                    const stats = pairStats[pair];
+                    const winRate = stats.total > 0 ? (stats.wins / stats.total) * 100 : 0;
+                    const colorClass = winRate >= 50 ? 'text-green-600' : 'text-red-600';
+                    const statElement = document.createElement('div');
+                    statElement.className = 'bg-white p-3 rounded-lg shadow text-center';
+                    statElement.innerHTML = `
+                        <p class="text-sm font-semibold text-gray-800">${pair}</p>
+                        <p class="text-lg font-bold ${colorClass} mt-1">${winRate.toFixed(2)}%</p>
+                        <p class="text-xs text-gray-500">(${stats.wins}/${stats.total} menang)</p>
+                    `;
+                    body.appendChild(statElement);
+                }
+                container.style.display = 'block';
+            }
+
+            function renderTable(data) {
+                tableHeaders.innerHTML = '';
+                tableBody.innerHTML = '';
+                if (data.length === 0) {
+                    tableContainer.classList.add('hidden');
+                    return;
+                }
+                const headers = Object.keys(data[0]);
+                headers.forEach(header => {
+                    const th = document.createElement('th');
+                    th.className = 'px-2 py-2 text-left text-xs font-light text-gray-500 uppercase tracking-wider';
+                    th.textContent = header;
+                    tableHeaders.appendChild(th);
+                });
+                data.forEach((row, index) => {
+                    const tr = document.createElement('tr');
+                    tr.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                    Object.values(row).forEach(value => {
+                        const td = document.createElement('td');
+                        td.className = 'px-2 py-2 whitespace-nowrap text-xs text-gray-800 font-light';
+                        td.textContent = value;
+                        tr.appendChild(td);
+                    });
+                    tableBody.appendChild(tr);
+                });
+                tableContainer.classList.remove('hidden');
+            }
+
+            function renderMetrics(metrics) {
+                primaryMetricsGrid.innerHTML = '';
+                secondaryMetricsGrid.innerHTML = '';
+                const formatPLPoints = (value) => (value * 10).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+                const primaryMetricsList = [
+                    { label: 'Total Perdagangan', value: metrics.totalTrades },
+                    { label: 'Probabilitas Menang', value: `${metrics.winRate}%`},
+                    { label: 'P/L Kumulatif (Poin)', value: formatPLPoints(metrics.finalProfit) },
+                ];
+                primaryMetricsList.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-gray-100 p-3 rounded-lg shadow-md border border-gray-200';
+                    card.innerHTML = `<p class="text-xs font-light text-gray-700">${item.label}</p><p class="text-xl font-light text-gray-900 mt-1">${item.value}</p>`;
+                    primaryMetricsGrid.appendChild(card);
+                });
+                const secondaryMetricsList = [
+                    { label: 'Max Drawdown (Poin)', value: metrics.maxDrawdownPoints.toFixed(2), duration: metrics.maxDrawdownPointsDuration },
+                    { label: 'TP Berturut-turut', value: metrics.maxTPStreak, duration: metrics.maxTPStreakDuration },
+                    { label: 'SL Berturut-turut', value: metrics.maxSLStreak, duration: metrics.maxSLStreakDuration },
+                    { label: 'Max Drawdown (%)', value: `${metrics.maxDrawdownPercentage.toFixed(2)}%`, duration: metrics.maxDrawdownPercentageDuration },
+                    { label: 'Avg. Profit/Trade (%)', value: `${metrics.avgProfitPerTrade.toFixed(2)}%` },
+                    { label: 'Avg. Kenaikan Bulanan', value: `${metrics.avgMonthlyGain.toFixed(2)}%` },
+                    { label: 'Avg. Kenaikan Tahunan', value: `${metrics.avgYearlyGain.toFixed(2)}%` },
+                    { label: 'Saldo Akhir', value: `$${metrics.finalBalance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` },
+                    { label: 'Avg. Risk:Reward', value: `1:${metrics.avgRiskReward.toFixed(2)}` },
+                    { label: 'Avg. Holding', value: `${metrics.avgHoldingPeriod.toFixed(2)} hari` },
+                ];
+                secondaryMetricsGrid.innerHTML = '';
+                secondaryMetricsList.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-gray-100 p-3 rounded-lg shadow-md border border-gray-200';
+                    let durationHtml = '';
+                    if (item.duration !== undefined) {
+                        durationHtml = `<p class="text-xs text-gray-500 mt-1">${item.duration.toFixed(0)} hari</p>`;
+                    }
+                    card.innerHTML = `<p class="text-xs font-light text-gray-700">${item.label}</p><p class="text-xl font-light text-gray-900 mt-1">${item.value}</p>${durationHtml}`;
+                    secondaryMetricsGrid.appendChild(card);
+                });
+            }
+            
+            const chartFontOptions = { font: { size: 12, weight: '300' }, color: '#4b5563' };
+            const tickFontOptions = { font: { size: 11, weight: '300' }, color: '#6b7280' };
+
+            function getTooltipData(tradeIndex) {
+                if (tradeIndex < 0 || !csvData || csvData.length === 0) return null;
+                const trade = csvData[tradeIndex - 1];
+                if (!trade) return null;
+
+                const exitDate = parseDate(trade['Tanggal Exit']);
+                const dateString = exitDate ? exitDate.toLocaleDateString('id-ID', { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A';
+
+                if (tradeIndex === 0) {
+                    return {
+                        date: 'Start', totalTrades: 0, growth: '0.00%', totalSL: 0, totalTP: 0, winRate: 'N/A', profit: '0.0',
+                        balance: `$${parseFloat(initialBalanceInput.value).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+                    };
+                }
+                const dataSlice = csvData.slice(0, tradeIndex);
+                let wins = 0;
+                dataSlice.forEach(d => { if (d.Keterangan.toUpperCase() === 'TP') wins++; });
+                const totalSL = tradeIndex - wins;
+                const winRate = tradeIndex > 0 ? (wins / tradeIndex) * 100 : 0;
+                return {
+                    date: dateString,
+                    totalTrades: tradeIndex,
+                    growth: `${fullMetrics.growthHistory[tradeIndex].growth.toFixed(2)}%`,
+                    totalSL: totalSL,
+                    totalTP: wins,
+                    winRate: `${winRate.toFixed(2)}%`,
+                    profit: (fullMetrics.profitHistory[tradeIndex].profit * 10).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+                    balance: `$${fullMetrics.balanceHistory[tradeIndex].balance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+                };
+            }
+
+            function showChartTooltip(chart, dataIndex) {
+                const tooltipEl = document.getElementById(`${chart.canvas.id}-tooltip`);
+                if (!tooltipEl) return;
+                const tooltipData = getTooltipData(dataIndex);
+                if (!tooltipData) return;
+                const { x: xPos, y: yPos } = chart.getDatasetMeta(0).data[dataIndex];
+                tooltipEl.innerHTML = `
+                    <div class="tooltip-grid">
+                        <div class="tooltip-title">${tooltipData.date}</div>
+                        <span class="tooltip-label">Total Trade:</span><span class="tooltip-value">${tooltipData.totalTrades}</span>
+                        <span class="tooltip-label">Total SL:</span><span class="tooltip-value">${tooltipData.totalSL}</span>
+                        <span class="tooltip-label">Total TP:</span><span class="tooltip-value">${tooltipData.totalTP}</span>
+                        <span class="tooltip-label">Probabilitas:</span><span class="tooltip-value">${tooltipData.winRate}</span>
+                        <span class="tooltip-label">Total Poin:</span><span class="tooltip-value">${tooltipData.profit}</span>
+                        <span class="tooltip-label">Total Saldo:</span><span class="tooltip-value">${tooltipData.balance}</span>
+                        <span class="tooltip-label">Total Growth:</span><span class="tooltip-value">${tooltipData.growth}</span>
+                    </div>
+                `;
+                tooltipEl.style.left = `${xPos}px`;
+                tooltipEl.style.top = `${yPos}px`;
+                const tooltipHeight = tooltipEl.offsetHeight;
+                if (yPos < tooltipHeight + 10) {
+                    tooltipEl.style.transform = 'translate(-50%, 20px)';
+                } else {
+                    tooltipEl.style.transform = 'translate(-50%, -110%)';
+                }
+                tooltipEl.classList.add('visible');
+            }
+
+            function hideChartTooltip(chart) {
+                const tooltipEl = document.getElementById(`${chart.canvas.id}-tooltip`);
+                if(tooltipEl) tooltipEl.classList.remove('visible');
+            }
+
+            function setupChartInteraction(chartInstance) {
+                const canvas = chartInstance.canvas;
+                const interactionHandler = (e) => {
+                    const points = chartInstance.getElementsAtEventForMode(e, 'nearest', { intersect: false }, true);
+                    if (points.length > 0) {
+                        const dataIndex = points[0].index;
+                        showChartTooltip(chartInstance, dataIndex);
+                        chartInstance.options.plugins.annotation.annotations.verticalLine.xMin = dataIndex;
+                        chartInstance.options.plugins.annotation.annotations.verticalLine.xMax = dataIndex;
+                        chartInstance.update('none');
+                    }
+                };
+                const leaveHandler = () => {
+                    hideChartTooltip(chartInstance);
+                    chartInstance.options.plugins.annotation.annotations.verticalLine.xMin = null;
+                    chartInstance.options.plugins.annotation.annotations.verticalLine.xMax = null;
+                    chartInstance.update('none');
+                };
+                canvas.onmousemove = interactionHandler;
+                canvas.ontouchmove = interactionHandler;
+                canvas.ontouchstart = interactionHandler;
+                canvas.onmouseout = leaveHandler;
+            }
+
+            function renderProfitChart(history) {
+                if (profitChartInstance) profitChartInstance.destroy();
+                profitChartInstance = new Chart(profitChartCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: history.map(item => item.trade),
+                        datasets: [{
+                            label: 'Profit/Loss',
+                            data: history.map(item => item.profit),
+                            borderColor: 'rgb(0, 0, 0)', backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                            borderWidth: 0.5, tension: 0, pointRadius: 0, pointHoverRadius: 5
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { 
+                            legend: { display: false }, tooltip: { enabled: false }, 
+                            annotation: { annotations: { verticalLine: { type: 'line', scaleID: 'x', borderWidth: 1.5, borderColor: 'rgba(250, 204, 21, 0.7)' } } }
+                        },
+                        scales: {
+                            x: { title: { display: true, text: 'Jumlah Perdagangan', ...chartFontOptions }, ticks: { display: false }, grid: { display: false } },
+                            y: { title: { display: true, text: 'P/L Kumulatif (Poin)', ...chartFontOptions }, ticks: { ...tickFontOptions, callback: (value) => (value * 10).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) } }
+                        },
+                        interaction: { mode: 'index', intersect: false }
+                    }
+                });
+                setupChartInteraction(profitChartInstance);
+            }
+
+            function renderPercentageGrowthChart(history) {
+                const container = document.getElementById('percentage-growth-chart-container');
+                if (!container) return;
+                container.style.display = 'block';
+                if (percentageGrowthChartInstance) percentageGrowthChartInstance.destroy();
+                percentageGrowthChartInstance = new Chart(percentageGrowthChartCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: history.map(item => item.trade),
+                        datasets: [{
+                            label: 'Pertumbuhan Kumulatif (%)',
+                            data: history.map(item => item.growth),
+                            borderColor: 'rgb(37, 99, 235)', backgroundColor: 'rgba(37, 99, 235, 0.05)',
+                            borderWidth: 0.5, tension: 0, pointRadius: 0, pointHoverRadius: 5, fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { 
+                            legend: { display: false }, tooltip: { enabled: false },
+                            annotation: { annotations: { verticalLine: { type: 'line', scaleID: 'x', borderWidth: 1.5, borderColor: 'rgba(250, 204, 21, 0.7)' } } }
+                        },
+                        scales: {
+                            x: { title: { display: true, text: 'Jumlah Perdagangan', ...chartFontOptions }, ticks: { display: false }, grid: { display: false } },
+                            y: { title: { display: true, text: 'Pertumbuhan Kumulatif (%)', ...chartFontOptions }, ticks: { ...tickFontOptions, callback: (value) => `${value.toFixed(2)}%` } }
+                        },
+                        interaction: { mode: 'index', intersect: false }
+                    }
+                });
+                setupChartInteraction(percentageGrowthChartInstance);
+            }
+
+            function renderBalanceGrowthChart(history) {
+                const container = document.getElementById('balance-growth-chart-container');
+                if (!container) return;
+                container.style.display = 'block';
+                if (balanceGrowthChartInstance) balanceGrowthChartInstance.destroy();
+                balanceGrowthChartInstance = new Chart(balanceGrowthChartCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: history.map(item => item.trade),
+                        datasets: [{
+                            label: 'Balance Kumulatif ($)',
+                            data: history.map(item => item.balance),
+                            borderColor: 'rgb(16, 185, 129)', backgroundColor: 'rgba(16, 185, 129, 0.05)',
+                            borderWidth: 0.5, tension: 0, pointRadius: 0, pointHoverRadius: 5, fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { 
+                            legend: { display: false }, tooltip: { enabled: false },
+                            annotation: { annotations: { verticalLine: { type: 'line', scaleID: 'x', borderWidth: 1.5, borderColor: 'rgba(250, 204, 21, 0.7)' } } }
+                        },
+                        scales: {
+                            x: { title: { display: true, text: 'Jumlah Perdagangan', ...chartFontOptions }, ticks: { display: false }, grid: { display: false } },
+                            y: { title: { display: true, text: 'Balance ($)', ...chartFontOptions }, ticks: { ...tickFontOptions, callback: (value) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD' }) } }
+                        },
+                        interaction: { mode: 'index', intersect: false }
+                    }
+                });
+                setupChartInteraction(balanceGrowthChartInstance);
+            }
+            
+            function runFullAnalysis(csvText) {
+                try {
+                    rawCsvText = csvText;
+                    csvData = parseCsv(rawCsvText);
+                    if (csvData.length === 0) throw new Error('Tidak ada data yang valid di file CSV.');
+                    const riskPercentage = parseFloat(riskPercentageInput.value);
+                    if (riskPercentageInput.value === '' || isNaN(riskPercentage)) throw new Error('Nilai "Presentase per Trade" tidak valid atau kosong.');
+                    const initialBalance = parseFloat(initialBalanceInput.value);
+                    if (isNaN(initialBalance)) throw new Error('Nilai "Saldo Awal" tidak valid.');
+
+                    statusContainer.innerHTML = '';
+                    resultsContainer.classList.remove('hidden');
+                    downloadSection.style.display = 'flex'; // Changed to flex to enable responsive classes
+
+                    fullMetrics = calculateStatistics(csvData, riskPercentage, initialBalance);
+                    renderMetrics(fullMetrics);
+                    renderProfitChart(fullMetrics.profitHistory);
+                    renderPercentageGrowthChart(fullMetrics.growthHistory);
+                    renderBalanceGrowthChart(fullMetrics.balanceHistory);
+                    
+                    monthlySummaryData = calculateMonthlySummary(csvData, riskPercentage);
+                    renderMonthlySummaryTable(monthlySummaryData);
+                    
+                    monthlyBalanceData = calculateMonthlyBalanceSummary(csvData, initialBalance, riskPercentage);
+                    renderMonthlyBalanceSummaryTable(monthlyBalanceData);
+
+                    calculateAndRenderPairStatistics(csvData);
+                    renderTable(csvData);
+                    saveState();
+                } catch (err) {
+                    console.error("Error processing file:", err);
+                    statusContainer.innerHTML = `<p class="text-red-600 font-light text-sm">Kesalahan: ${err.message}.</p>`;
+                    resultsContainer.classList.add('hidden');
+                    downloadSection.style.display = 'none';
+                }
+            }
+
+            function saveState() {
+                if (rawCsvText) localStorage.setItem('savedCsvData', rawCsvText);
+                const inputs = {
+                    initialBalance: initialBalanceInput.value, 
+                    riskPercentage: riskPercentageInput.value,
+                };
+                localStorage.setItem('savedInputs', JSON.stringify(inputs));
+            }
+
+            function loadState() {
+                const savedInputs = localStorage.getItem('savedInputs');
+                if (savedInputs) {
+                    const inputs = JSON.parse(savedInputs);
+                    initialBalanceInput.value = inputs.initialBalance || '1000';
+                    riskPercentageInput.value = inputs.riskPercentage || '1';
+                }
+                const savedCsvData = localStorage.getItem('savedCsvData');
+                if (savedCsvData) {
+                    runFullAnalysis(savedCsvData);
+                }
+                loadPhotosFromLocalStorage();
+                renderFileInfo(pdfFileContainer, 'savedPdfFile', pdfIcon);
+                renderFileInfo(excelFileContainer, 'savedExcelFile', excelIcon);
+                renderFileInfo(tplFileContainer, 'savedTplFile', tplIcon);
+            }
+
+            fileUpload.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                statusContainer.innerHTML = `<div class="flex justify-center items-center"><div class="w-6 h-6 border-4 border-dashed rounded-full animate-spin border-gray-900"></div></div>`;
+                resultsContainer.classList.add('hidden');
+                const reader = new FileReader();
+                reader.onload = (e) => runFullAnalysis(e.target.result);
+                reader.onerror = () => {
+                    statusContainer.innerHTML = `<p class="text-red-600 font-light text-sm">Terjadi kesalahan saat membaca file.</p>`;
+                };
+                reader.readAsText(file);
+            });
+            
+            loadState();
+
+            [initialBalanceInput, riskPercentageInput].forEach(input => {
+                input.addEventListener('input', () => { 
+                    const value = input.value;
+                    if (value && !isNaN(parseFloat(value)) && csvData.length > 0) {
+                        runFullAnalysis(rawCsvText);
+                    }
+                });
+            });
+
+            downloadExcelBtn.addEventListener('click', () => {
+                if (typeof XLSX === 'undefined') {
+                    alert('Gagal memuat pustaka ekspor Excel. Silakan coba lagi.');
+                    return;
+                }
+                const wb = XLSX.utils.book_new();
+
+                // 1. Sheet: Ringkasan Utama
+                const summaryDataForExcel = [
+                    ["Metrik", "Nilai", "Durasi (hari)"],
+                    ["Total Perdagangan", fullMetrics.totalTrades],
+                    ["Probabilitas Menang", `${fullMetrics.winRate}%`],
+                    ["P/L Kumulatif (Poin)", (fullMetrics.finalProfit * 10).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })],
+                    [],
+                    ["Metrik Tambahan"],
+                    ["Max Drawdown (Poin)", fullMetrics.maxDrawdownPoints.toFixed(2), fullMetrics.maxDrawdownPointsDuration.toFixed(0)],
+                    ["TP Berturut-turut", fullMetrics.maxTPStreak, fullMetrics.maxTPStreakDuration.toFixed(0)],
+                    ["SL Berturut-turut", fullMetrics.maxSLStreak, fullMetrics.maxSLStreakDuration.toFixed(0)],
+                    ["Max Drawdown (%)", `${fullMetrics.maxDrawdownPercentage.toFixed(2)}%`, fullMetrics.maxDrawdownPercentageDuration.toFixed(0)],
+                    ["Avg. Profit/Trade (%)", `${fullMetrics.avgProfitPerTrade.toFixed(2)}%`],
+                    ["Avg. Kenaikan Bulanan", `${fullMetrics.avgMonthlyGain.toFixed(2)}%`],
+                    ["Avg. Kenaikan Tahunan", `${fullMetrics.avgYearlyGain.toFixed(2)}%`],
+                    ["Saldo Awal", `$${parseFloat(initialBalanceInput.value).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
+                    ["Saldo Akhir", `$${fullMetrics.finalBalance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
+                    ["Avg. Risk:Reward", `1:${fullMetrics.avgRiskReward.toFixed(2)}`],
+                    ["Avg. Holding (hari)", `${fullMetrics.avgHoldingPeriod.toFixed(2)} hari`],
+                ];
+                const ws1 = XLSX.utils.aoa_to_sheet(summaryDataForExcel);
+                XLSX.utils.book_append_sheet(wb, ws1, "Ringkasan Utama");
+
+                // 2. Sheet: Ringkasan P/L Bulanan (%)
+                const plDataForExcel = [];
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+                plDataForExcel.push(['Tahun', ...months, 'Total']);
+                const years = Object.keys(monthlySummaryData.percentageSummary || {}).sort();
+                years.forEach(year => {
+                    const row = [year];
+                    for (let i = 0; i < 12; i++) {
+                        const p = monthlySummaryData.percentageSummary[year][i];
+                        const tc = monthlySummaryData.monthlyTradeCounts[year][i];
+                        const tpc = monthlySummaryData.monthlyTPCounts[year][i];
+                        const slc = monthlySummaryData.monthlySLCounts[year][i];
+                        const netTP = tpc - slc;
+                        let cellValue = p !== 0 ? `${p.toFixed(2)}%` : '-';
+                        if (tc > 0) {
+                            cellValue += `\n(${tc})\n(SL:${slc} / TP:${tpc})\nNilai TP Bersih: ${netTP}`;
+                        }
+                        row.push(cellValue);
+                    }
+                    const totalP = monthlySummaryData.yearlyTotals[year];
+                    const totalTC = monthlySummaryData.yearlyTradeCounts[year];
+                    const totalTPC = monthlySummaryData.yearlyTPCounts[year];
+                    const totalSLC = monthlySummaryData.yearlySLCounts[year];
+                    const totalNetTP = totalTPC - totalSLC;
+                    let totalCellValue = totalP !== 0 ? `${totalP.toFixed(2)}%` : '-';
+                    if (totalTC > 0) {
+                        totalCellValue += `\n(${totalTC})\n(SL:${totalSLC} / TP:${totalTPC})\nNilai TP Bersih: ${totalNetTP}`;
+                    }
+                    row.push(totalCellValue);
+                    plDataForExcel.push(row);
+                });
+                const ws2 = XLSX.utils.aoa_to_sheet(plDataForExcel);
+                ws2['!rows'] = years.map(() => ({ hpt: 60 }));
+                XLSX.utils.book_append_sheet(wb, ws2, "Ringkasan P&L Bulanan (%)");
+
+                // 3. Sheet: Ringkasan Balance Bulanan ($)
+                const balanceDataForExcel = [];
+                balanceDataForExcel.push(['Tahun', ...months, 'Akhir Tahun']);
+                const balanceYears = Object.keys(monthlyBalanceData.balanceSummary || {}).sort();
+                balanceYears.forEach(year => {
+                    const row = [year];
+                    let lastBalance = null;
+                    let yearlyNetChange = 0;
+                    for (let i = 0; i < 12; i++) {
+                        const balance = monthlyBalanceData.balanceSummary[year][i];
+                        const netChange = monthlyBalanceData.netChangeSummary[year][i];
+                        let cellValue = balance !== null ? `$${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
+                        if (netChange !== null) {
+                            cellValue += `\nDolar Bersih: ${netChange > 0 ? '+' : ''}$${netChange.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                            yearlyNetChange += netChange;
+                        }
+                        row.push(cellValue);
+                        if (balance !== null) lastBalance = balance;
+                    }
+                    let totalCellValue = lastBalance !== null ? `$${lastBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
+                    totalCellValue += `\nDolar Bersih: ${yearlyNetChange > 0 ? '+' : ''}$${yearlyNetChange.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                    row.push(totalCellValue);
+                    balanceDataForExcel.push(row);
+                });
+                const ws3 = XLSX.utils.aoa_to_sheet(balanceDataForExcel);
+                ws3['!rows'] = balanceYears.map(() => ({ hpt: 30 }));
+                XLSX.utils.book_append_sheet(wb, ws3, "Ringkasan Balance Bulanan ($)");
+
+                // 4. Sheet: Statistik per Pair
+                const pairStats = {};
+                csvData.forEach(trade => {
+                    const pair = trade['Pair'];
+                    const keterangan = trade['Keterangan']?.toUpperCase();
+                    if (!pair) return;
+                    if (!pairStats[pair]) pairStats[pair] = { total: 0, wins: 0 };
+                    pairStats[pair].total++;
+                    if (keterangan === 'TP') pairStats[pair].wins++;
+                });
+                const pairDataForExcel = [['Pair', 'Probabilitas Menang (%)', 'Rasio Menang/Total']];
+                Object.keys(pairStats).sort().forEach(pair => {
+                    const stats = pairStats[pair];
+                    const winRate = stats.total > 0 ? (stats.wins / stats.total) * 100 : 0;
+                    pairDataForExcel.push([pair, `${winRate.toFixed(2)}%`, `(${stats.wins}/${stats.total} menang)`]);
+                });
+                const ws4 = XLSX.utils.aoa_to_sheet(pairDataForExcel);
+                XLSX.utils.book_append_sheet(wb, ws4, "Statistik per Pair");
+
+                // 5. Sheet: Data Transaksi
+                const ws5 = XLSX.utils.json_to_sheet(csvData);
+                XLSX.utils.book_append_sheet(wb, ws5, "Data Transaksi");
+
+                XLSX.writeFile(wb, "Laporan_Backtest.xlsx");
+            });
+            
+            // [NEW] PDF Download Logic
+            downloadPdfBtn.addEventListener('click', () => {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({
+                    orientation: 'landscape',
+                    unit: 'pt',
+                    format: 'a4'
+                });
+
+                const professionalFont = 'Helvetica';
+                const titleFontSize = 18;
+                const headerFontSize = 12;
+                const bodyFontSize = 9;
+                const smallFontSize = 7;
+                const textColor = '#000000';
+                
+                let yPos = 40;
+
+                // Title
+                doc.setFont(professionalFont, 'bold');
+                doc.setFontSize(titleFontSize);
+                doc.setTextColor(textColor);
+                doc.text('Laporan Analisis Backtest', doc.internal.pageSize.getWidth() / 2, yPos, { align: 'center' });
+                yPos += 30;
+
+                // Summary Metrics
+                doc.setFont(professionalFont, 'bold');
+                doc.setFontSize(headerFontSize);
+                doc.text('Ringkasan Metrik', 40, yPos);
+                yPos += 15;
+
+                const summaryBody = [
+                    ['Total Perdagangan', fullMetrics.totalTrades],
+                    ['Probabilitas Menang', `${fullMetrics.winRate}%`],
+                    ['P/L Kumulatif (Poin)', (fullMetrics.finalProfit * 10).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })],
+                    ['Max Drawdown (Poin)', `${fullMetrics.maxDrawdownPoints.toFixed(2)} (${fullMetrics.maxDrawdownPointsDuration.toFixed(0)} hari)`],
+                    ['TP Berturut-turut', `${fullMetrics.maxTPStreak} (${fullMetrics.maxTPStreakDuration.toFixed(0)} hari)`],
+                    ['SL Berturut-turut', `${fullMetrics.maxSLStreak} (${fullMetrics.maxSLStreakDuration.toFixed(0)} hari)`],
+                    ['Max Drawdown (%)', `${fullMetrics.maxDrawdownPercentage.toFixed(2)}% (${fullMetrics.maxDrawdownPercentageDuration.toFixed(0)} hari)`],
+                    ['Avg. Profit/Trade (%)', `${fullMetrics.avgProfitPerTrade.toFixed(2)}%`],
+                    ['Avg. Kenaikan Bulanan', `${fullMetrics.avgMonthlyGain.toFixed(2)}%`],
+                    ['Avg. Kenaikan Tahunan', `${fullMetrics.avgYearlyGain.toFixed(2)}%`],
+                    ['Saldo Awal', `$${parseFloat(initialBalanceInput.value).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
+                    ['Saldo Akhir', `$${fullMetrics.finalBalance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`],
+                    ['Avg. Risk:Reward', `1:${fullMetrics.avgRiskReward.toFixed(2)}`],
+                    ['Avg. Holding (hari)', `${fullMetrics.avgHoldingPeriod.toFixed(2)} hari`],
+                ];
+                
+                doc.autoTable({
+                    startY: yPos,
+                    body: summaryBody,
+                    theme: 'grid',
+                    styles: { font: professionalFont, fontSize: bodyFontSize, textColor: textColor },
+                    headStyles: { fillColor: [220, 220, 220], textColor: textColor, fontStyle: 'bold' },
+                    columnStyles: { 0: { fontStyle: 'bold' } }
+                });
+                yPos = doc.autoTable.previous.finalY + 20;
+
+                // Charts
+                doc.setFont(professionalFont, 'bold');
+                doc.setFontSize(headerFontSize);
+                doc.text('Grafik Kinerja', 40, yPos);
+                yPos += 20;
+                
+                const chartWidth = 250;
+                const chartHeight = 125;
+                const profitChartImg = profitChartInstance.toBase64Image('image/png', 1.0);
+                const percentageChartImg = percentageGrowthChartInstance.toBase64Image('image/png', 1.0);
+                const balanceChartImg = balanceGrowthChartInstance.toBase64Image('image/png', 1.0);
+
+                doc.addImage(profitChartImg, 'PNG', 40, yPos, chartWidth, chartHeight);
+                doc.addImage(percentageChartImg, 'PNG', 40 + chartWidth + 15, yPos, chartWidth, chartHeight);
+                doc.addPage('a4', 'landscape');
+                yPos = 40;
+                doc.addImage(balanceChartImg, 'PNG', 40, yPos, chartWidth, chartHeight);
+                yPos += chartHeight + 30;
+
+                // P/L Monthly Summary
+                doc.setFont(professionalFont, 'bold');
+                doc.setFontSize(headerFontSize);
+                doc.text('Ringkasan P/L Bulanan (%)', 40, yPos);
+                yPos += 15;
+                
+                const plHead = [['Tahun', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des', 'Total']];
+                const plBody = [];
+                Object.keys(monthlySummaryData.percentageSummary || {}).sort().forEach(year => {
+                    const row = [year];
+                    for (let i = 0; i < 12; i++) {
+                         const p = monthlySummaryData.percentageSummary[year][i];
+                         row.push(p !== 0 ? `${p.toFixed(2)}%` : '-');
+                    }
+                    row.push(`${monthlySummaryData.yearlyTotals[year].toFixed(2)}%`);
+                    plBody.push(row);
+                });
+
+                doc.autoTable({
+                    startY: yPos,
+                    head: plHead,
+                    body: plBody,
+                    theme: 'grid',
+                    styles: { font: professionalFont, fontSize: smallFontSize, textColor: textColor, cellPadding: 2 },
+                    headStyles: { fillColor: [220, 220, 220], textColor: textColor, fontStyle: 'bold' }
+                });
+                yPos = doc.autoTable.previous.finalY + 20;
+
+                // Balance Monthly Summary
+                doc.setFont(professionalFont, 'bold');
+                doc.setFontSize(headerFontSize);
+                doc.text('Ringkasan Balance Bulanan ($)', 40, yPos);
+                yPos += 15;
+
+                const balanceHead = [['Tahun', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des', 'Akhir Tahun']];
+                const balanceBody = [];
+                const formatCurrency = (value) => value !== null ? `$${value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-';
+
+                Object.keys(monthlyBalanceData.balanceSummary || {}).sort().forEach(year => {
+                    const row = [year];
+                    let lastBalance = null;
+                    for (let i = 0; i < 12; i++) {
+                        const balance = monthlyBalanceData.balanceSummary[year][i];
+                        row.push(formatCurrency(balance));
+                        if(balance !== null) lastBalance = balance;
+                    }
+                    row.push(formatCurrency(lastBalance));
+                    balanceBody.push(row);
+                });
+
+                doc.autoTable({
+                    startY: yPos,
+                    head: balanceHead,
+                    body: balanceBody,
+                    theme: 'grid',
+                    styles: { font: professionalFont, fontSize: smallFontSize, textColor: textColor, cellPadding: 2 },
+                    headStyles: { fillColor: [220, 220, 220], textColor: textColor, fontStyle: 'bold' }
+                });
+                yPos = doc.autoTable.previous.finalY + 20;
+
+                doc.addPage('a4', 'landscape');
+                yPos = 40;
+
+                // Pair Statistics
+                doc.setFont(professionalFont, 'bold');
+                doc.setFontSize(headerFontSize);
+                doc.text('Statistik per Pair', 40, yPos);
+                yPos += 15;
+                
+                const pairStats = {};
+                csvData.forEach(trade => {
+                    const pair = trade['Pair'];
+                    if (!pair) return;
+                    if (!pairStats[pair]) pairStats[pair] = { total: 0, wins: 0 };
+                    pairStats[pair].total++;
+                    if (trade['Keterangan']?.toUpperCase() === 'TP') pairStats[pair].wins++;
+                });
+                const pairBody = [];
+                Object.keys(pairStats).sort().forEach(pair => {
+                    const stats = pairStats[pair];
+                    const winRate = stats.total > 0 ? (stats.wins / stats.total) * 100 : 0;
+                    pairBody.push([pair, `${winRate.toFixed(2)}%`, `${stats.wins}/${stats.total}`]);
+                });
+
+                doc.autoTable({
+                    startY: yPos,
+                    head: [['Pair', 'Probabilitas Menang (%)', 'Rasio Menang/Total']],
+                    body: pairBody,
+                    theme: 'grid',
+                    styles: { font: professionalFont, fontSize: bodyFontSize, textColor: textColor },
+                    headStyles: { fillColor: [220, 220, 220], textColor: textColor, fontStyle: 'bold' }
+                });
+                yPos = doc.autoTable.previous.finalY + 20;
+
+                // Full Trade Data
+                doc.setFont(professionalFont, 'bold');
+                doc.setFontSize(headerFontSize);
+                doc.text('Data Transaksi Lengkap', 40, yPos);
+                yPos += 15;
+
+                const tradeHead = [Object.keys(csvData[0] || {})];
+                const tradeBody = csvData.map(Object.values);
+
+                doc.autoTable({
+                    startY: yPos,
+                    head: tradeHead,
+                    body: tradeBody,
+                    theme: 'grid',
+                    styles: { font: professionalFont, fontSize: smallFontSize, textColor: textColor, cellPadding: 2 },
+                    headStyles: { fillColor: [220, 220, 220], textColor: textColor, fontStyle: 'bold' }
+                });
+
+                doc.save('Laporan_Backtest.pdf');
+            });
+
+
+        });
+    </script>
+</body>
+</html>
